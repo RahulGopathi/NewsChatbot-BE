@@ -19,6 +19,7 @@ class ContextSource(BaseModel):
     title: str
     source: str
     url: str
+    id: Optional[int] = None
 
 
 class DetailedChatResponse(ChatResponse):
@@ -43,10 +44,6 @@ async def chat(request: ChatRequest):
         async def generate_stream():
             # Send START event with proper SSE format
             yield f"data: {json.dumps({'type': 'START'})}\n\n"
-
-            # Send context sources
-            if result["context_used"]:
-                yield f"data: {json.dumps({'type': 'CONTEXT', 'context_sources': [ContextSource(**source).dict() for source in result['context_used']]})}\n\n"
 
             # Stream the response
             if result["stream"]:

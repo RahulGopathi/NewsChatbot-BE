@@ -1,12 +1,13 @@
 import json
 from typing import List, Optional, Dict, Any
 import redis
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from app.core.config import get_settings
 from app.models.chat import Message, ChatHistory
 from app.rag.embeddings import EmbeddingGenerator
 from app.rag.vector_store import VectorStore
+from app.rag.query_analyzer import QueryAnalyzer
 from google import genai
 
 settings = get_settings()
@@ -27,6 +28,7 @@ class ChatService:
         )
         self.embedding_generator = EmbeddingGenerator()
         self.vector_store = VectorStore()
+        self.query_analyzer = QueryAnalyzer()
 
     def _get_session_key(self, session_id: str) -> str:
         return f"chat:session:{session_id}"
@@ -123,13 +125,15 @@ class ChatService:
     async def retrieve_relevant_news(
         self,
         query: str,
+        query_analysis: Dict[str, Any],
         limit: int = settings.TOP_K_RESULTS,
     ) -> List[Dict[str, Any]]:
         """
-        Retrieve news articles relevant to the query
+        Retrieve news articles relevant to the query with optimized filters
 
         Parameters:
         - query: User's query
+        - query_analysis: Analysis of the query type and filters
         - limit: Maximum number of articles to retrieve
         """
         try:
@@ -138,10 +142,69 @@ class ChatService:
                 query
             )
 
+            # Extract filters from query analysis
+            filters = query_analysis.get("filters", {})
+            query_type = query_analysis.get("query_type", "relevance")
+            ordering = query_analysis.get("ordering", "relevance")
+
+            # Set up search parameters
+            search_params = {
+                "query_embedding": query_embedding,
+                "limit": limit,
+            }
+
+            # Apply date filters if present, converting ISO strings to datetime objects
+            if filters.get("start_date"):
+                try:
+                    # Parse the date string to date object without time
+                    date_str = filters["start_date"]
+                    # Strip time component if present
+                    if "T" in date_str:
+                        date_str = date_str.split("T")[0]
+                    start_date = datetime.strptime(date_str, "%Y-%m-%d")
+                    search_params["start_date"] = start_date
+                    logger.info(f"Using start_date filter: {start_date}")
+                except ValueError as e:
+                    logger.error(f"Invalid start_date format: {str(e)}")
+
+            if filters.get("end_date"):
+                try:
+                    # Parse the date string to date object without time
+                    date_str = filters["end_date"]
+                    # Strip time component if present
+                    if "T" in date_str:
+                        date_str = date_str.split("T")[0]
+                    end_date = datetime.strptime(date_str, "%Y-%m-%d")
+                    search_params["end_date"] = end_date
+                    logger.info(f"Using end_date filter: {end_date}")
+                except ValueError as e:
+                    logger.error(f"Invalid end_date format: {str(e)}")
+
+            # Apply category filters if present
+            if filters.get("categories"):
+                search_params["categories"] = filters["categories"]
+
+            # Apply source domain filters if present
+            if filters.get("sources"):
+                search_params["source_domains"] = filters["sources"]
+
+            # For timeline queries, increase the result limit for better temporal coverage
+            if query_type == "timeline":
+                search_params["limit"] = limit * 2
+
+            # For summarization queries, prioritize recency
+            if query_type == "summary" and not filters.get("start_date"):
+                # Set start date to 7 days ago if not specified
+                search_params["start_date"] = datetime.now().replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                ) - timedelta(days=7)
+
             # Search vector store directly
-            relevant_articles = await self.vector_store.search(
-                query_embedding=query_embedding, limit=limit
-            )
+            relevant_articles = await self.vector_store.search(**search_params)
+
+            # Post-process results based on ordering
+            if ordering == "chronological" or query_type == "timeline":
+                relevant_articles.sort(key=lambda x: x.get("date_publish", ""))
 
             # Format articles for chat context
             formatted_articles = []
@@ -189,45 +252,58 @@ class ChatService:
         user_msg = Message(role="user", content=user_message)
         await self.add_message(session_id, user_msg)
 
-        # Retrieve relevant news context
-        relevant_news = await self.retrieve_relevant_news(query=user_message)
-
-        # Generate response using Gemini AI with the retrieved context
-        context_text = ""
-        context_used = []
-
-        for i, article in enumerate(relevant_news[:3]):  # Limit to top 3 articles
-            context_text += f"\n\nArticle {i+1}: {article['title']} ({article['source']}, {article['date']})\n"
-            context_text += (
-                f"{article['text'][:500]}...\n"  # First 500 chars of the article
-            )
-
-            context_used.append(
-                {
-                    "title": article["title"],
-                    "source": article["source"],
-                    "url": article["url"],
-                }
-            )
-
-        prompt = f"""You are a helpful assistant providing information about news articles.
-        
-User query: {user_message}
-
-Based on the following news articles, provide a comprehensive and accurate response:
-
-{context_text}
-
-Answer the user's query with information from these articles. If the articles don't contain relevant information, 
-acknowledge that and provide general information if possible. Be concise but thorough.
-"""
-
         try:
-            # Generate streaming response with Gemini using synchronous streaming
+            # Analyze the query to determine type and filters
+            query_analysis = await self.query_analyzer.analyze_query(user_message)
 
-            # Use the specific gemini-2.0-flash-001 model as per reference code
+            print(json.dumps(query_analysis, indent=4))
+
+            # Retrieve relevant news context with optimized filters
+            relevant_news = await self.retrieve_relevant_news(
+                query=user_message,
+                query_analysis=query_analysis,
+                limit=settings.TOP_K_RESULTS,
+            )
+
+            # Generate response using Gemini AI with the retrieved context
+            context_text = ""
+            context_used = []
+
+            # Use more articles for timelines, fewer for other query types
+            article_limit = 5 if query_analysis.get("query_type") == "timeline" else 3
+
+            for i, article in enumerate(relevant_news[:article_limit]):
+                # Format article reference for context with clearer source numbering
+                context_text += f"\n\nArticle {i+1}: {article['title']} ({article['source']}, {article['date']})\n"
+                context_text += f"URL: {article['url']}\n"
+
+                # Include more content for richer context, especially for fact-checking
+                if query_analysis.get("query_type") == "fact_check":
+                    article_length = 800
+                else:
+                    article_length = 500
+
+                context_text += f"{article['text'][:article_length]}...\n"
+
+                context_used.append(
+                    {
+                        "title": article["title"],
+                        "source": article["source"],
+                        "url": article["url"],
+                    }
+                )
+
+            # Create an optimized prompt based on query type
+            prompt = self.query_analyzer.create_prompt_for_query_type(
+                user_query=user_message,
+                context_text=context_text,
+                query_type=query_analysis.get("query_type", "relevance"),
+                context_used=context_used,
+            )
+
+            # Generate streaming response with Gemini using synchronous streaming
             response_stream = client.models.generate_content_stream(
-                model="gemini-2.0-flash-001",  # Use the model specified in the reference code
+                model="gemini-2.0-flash-001",
                 contents=prompt,
             )
 

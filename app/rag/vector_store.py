@@ -269,13 +269,18 @@ class VectorStore:
         if start_date or end_date:
             date_condition = {}
             if start_date:
+                # Convert datetime to timestamp for numerical comparison
                 date_condition["gte"] = start_date.isoformat()
+                logger.debug(f"Added date filter gte: {date_condition['gte']}")
             if end_date:
+                # Convert datetime to timestamp for numerical comparison
                 date_condition["lte"] = end_date.isoformat()
+                logger.debug(f"Added date filter lte: {date_condition['lte']}")
 
+            # Use PayloadField.datetime for proper datetime range filtering
             filter_conditions.append(
                 models.FieldCondition(
-                    key="date_publish", range=models.Range(**date_condition)
+                    key="date_publish", range=models.DatetimeRange(**date_condition)
                 )
             )
 
