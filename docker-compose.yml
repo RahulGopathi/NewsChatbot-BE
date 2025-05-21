@@ -3,17 +3,17 @@ version: '3.8'
 services:
 
   frontend:
-    image: newschatbot-fe:latest
+    image: ghcr.io/rahulgopathi/newschatbot-fe:latest
     container_name: newschatbot-frontend
     ports:
-      - "3000:80"
+      - "80:80"
     restart: unless-stopped
     networks:
       - newschatbot_network
     environment:
       - VITE_BACKEND_API_URL=http://api:8000
   api:
-    image: newschatbot-be:latest
+    image: ghcr.io/rahulgopathi/newschatbot-be:latest
     container_name: newschatbot_api
     build:
       context: .

@@ -237,9 +237,12 @@ class QueryAnalyzer:
         - A prompt optimized for the query type
         - A dictionary mapping source numbers to source details
         """
+        today = datetime.now().strftime("%Y-%m-%d")
 
         # System instructions that apply to all response types
-        system_instructions = """
+        system_instructions = f"""
+Today's date is {today}.
+
 You are NewsChatbot, a helpful and knowledgeable AI assistant specializing in current events and news. Your responses should be:
 
 1. Informative and accurate, based on the news information you have access to
