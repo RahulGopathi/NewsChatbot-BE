@@ -7,9 +7,12 @@ services:
     container_name: newschatbot-frontend
     ports:
       - "80:80"
+      - "443:443"
     restart: unless-stopped
     networks:
       - newschatbot_network
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     environment:
       - VITE_BACKEND_API_URL=http://api:8000
   api:
