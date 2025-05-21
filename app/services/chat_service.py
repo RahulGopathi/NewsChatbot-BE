@@ -83,7 +83,8 @@ class ChatService:
             "created_at": chat_history.created_at.isoformat(),
             "updated_at": chat_history.updated_at.isoformat(),
         }
-        self.redis_client.set(session_key, json.dumps(session_data))
+        # Set with expiration of 1 day (86400 seconds)
+        self.redis_client.set(session_key, json.dumps(session_data), ex=86400)
 
     async def add_message(self, session_id: str, message: Message):
         """Add a message to the chat session"""
