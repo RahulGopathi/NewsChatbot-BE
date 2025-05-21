@@ -6,12 +6,23 @@ A RAG-powered chatbot backend for answering queries about news articles using Fa
 
 ## Features
 
-- RAG (Retrieval-Augmented Generation) pipeline for accurate responses
+- RAG (Retrieval-Augmented Generation) pipeline for accurate news-based responses
 - Session-based chat history using Redis
-- Vector store for efficient document retrieval
+- Vector store (Qdrant) for efficient document retrieval
 - RESTful API endpoints for chat interaction
-- News article ingestion from multiple RSS feeds (NYT Homepage, Technology)
+- News article ingestion from multiple RSS feeds
 - Article categorization using RSS metadata
+- Sophisticated query analysis system to understand user intent
+
+## Tech Stack
+
+- **FastAPI**: High-performance web framework
+- **Redis**: Session management and caching
+- **Qdrant**: Vector database for semantic search
+- **Gemini AI**: LLM for response generation
+- **Jina AI**: Embeddings for semantic search
+- **Docker**: Containerization
+- **Poetry**: Dependency management
 
 ## Prerequisites
 
@@ -19,59 +30,62 @@ A RAG-powered chatbot backend for answering queries about news articles using Fa
 - Redis server
 - Qdrant vector store
 - Gemini API key
+- Jina AI API key (for embeddings)
 
-## Setup
+## Local Setup
 
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/RahulGopathi/NewsChatbot-BE.git
 cd NewsChatbot-BE
 ```
 
-2. Create and activate a virtual environment:
+2. Set up Python environment with Poetry:
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Install Poetry if you don't have it
+pip install poetry
+
+# Install dependencies
+poetry install
+
+# Activate the virtual environment
+poetry shell
 ```
 
-3. Install dependencies:
+3. Configure environment variables:
 
-```bash
-pip install -r requirements.txt
+Create a `.env` file in the root directory with:
+
 ```
+# API Keys
+GEMINI_API_KEY=your-gemini-api-key
+JINA_API_KEY=your-jina-api-key
 
-4. Copy the environment file and update the variables:
+# Redis Configuration
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=
 
-```bash
-cp .env.example .env
+# Qdrant Configuration
+VECTOR_STORE_HOST=localhost
+VECTOR_STORE_PORT=6333
 ```
-
-5. Update the `.env` file with your configuration:
-
-- Set your Gemini API key
-- Configure Redis connection details
-- Configure Qdrant vector store settings
 
 ## Running the Application
 
-### Option 1: Using Docker Compose
+### Option 1: Using Docker Compose (Recommended)
 
-The application can be run entirely using Docker Compose:
+This application is fully containerized with all dependencies:
 
 ```bash
-# Create a .env file with your configuration
-cp .env.example .env
-
-# Edit the .env file with your API keys
-nano .env
-
-# Start all services including the API
+# Start all services including Redis, Qdrant, and API
 docker-compose up -d
 ```
 
-The API will be available at `http://localhost:8000`
+The frontend will be available at `https://localhost` and the API will be available at `http://localhost:8000`
 
 For development, you can run only the dependencies and the API separately:
 
@@ -79,8 +93,8 @@ For development, you can run only the dependencies and the API separately:
 # Start only Redis and Qdrant
 docker-compose up -d redis qdrant
 
-# Run the API with hot-reload for development
-uvicorn main:app --reload
+# Run the API with auto-reload
+python run.py
 ```
 
 ### Option 2: Manual Setup
@@ -100,105 +114,136 @@ docker run -p 6333:6333 qdrant/qdrant
 3. Run the FastAPI application:
 
 ```bash
+python run.py
+# or
 uvicorn main:app --reload
 ```
 
-## Docker Setup
-
-The application includes a Dockerfile and Docker Compose configuration for easy deployment:
-
-### Building the Docker Image Locally
-
-```bash
-# Build the Docker image
-docker build -t newschatbot-be .
-
-# Run the container
-docker run -p 8000:8000 --env-file .env newschatbot-be
-```
-
-### Using GitHub Container Registry
-
-After pushing to GitHub, the GitHub Actions workflow will automatically build and publish the Docker image. To use it:
-
-```bash
-# Pull the image
-docker pull ghcr.io/username/newschatbot-be:latest
-
-# Run the container
-docker run -p 8000:8000 --env-file .env ghcr.io/username/newschatbot-be:latest
-```
-
-Replace `username` with your GitHub username or organization.
-
-## GitHub Actions CI/CD
-
-The repository includes a GitHub Actions workflow that:
-
-1. Builds the Docker image only when a tag starting with "v" is pushed (e.g., v1.0.0)
-2. Tags the Docker image based on the git tag
-3. Pushes the image to GitHub Container Registry
-
-To enable the GitHub Actions workflow:
-
-1. Go to your repository settings on GitHub
-2. Navigate to "Actions" > "General"
-3. Ensure "Read and write permissions" is selected under "Workflow permissions"
-
-For more details, see the workflow file at `.github/workflows/docker-build.yml`.
-
 ## News Ingestion
 
-The application includes a service to ingest news articles from multiple RSS feeds:
-
-1. Run the news ingestion script:
-
-```bash
-python news_ingestion.py
-```
-
-By default, it will ingest around 50 articles. You can adjust this limit:
+The application includes a script to ingest news articles from RSS feeds:
 
 ```bash
 python news_ingestion.py --limit 100
 ```
 
-The service fetches articles from:
+By default, it will ingest articles from:
 
 - New York Times Homepage
 - New York Times Technology section
 
-Articles are stored as JSON files in the `data/raw_articles` directory with their associated categories and metadata. These articles are later used by the RAG pipeline to answer user queries, with categories providing additional context for more accurate responses.
+Articles are stored in the `data/raw_articles` directory with metadata and categorization.
 
-For more details, see [News Ingestion Documentation](docs/news_ingestion.md).
+## Project Structure
+
+```
+NewsChatbot-BE/
+├── app/                     # Application code
+│   ├── api/                 # API endpoints
+│   │   └── chat.py          # Chat-related endpoints
+│   ├── core/                # Core settings and config
+│   ├── models/              # Pydantic models
+│   ├── rag/                 # Retrieval-Augmented Generation
+│   │   ├── embeddings.py    # Embedding generation
+│   │   ├── query_analyzer.py # Query analysis
+│   │   └── vector_store.py  # Vector database interaction
+│   ├── services/            # Business logic
+│   └── utils/               # Utility functions
+├── data/                    # Data storage
+│   └── raw_articles/        # Ingested news articles
+├── logs/                    # Application logs
+├── env/                     # Environment configurations
+├── Dockerfile               # Docker configuration
+├── docker-compose.yml       # Docker Compose configuration
+├── pyproject.toml           # Poetry dependencies
+├── main.py                  # FastAPI application
+├── run.py                   # Application runner
+└── news_ingestion.py        # News ingestion script
+```
 
 ## API Endpoints
 
 ### Chat Endpoints
 
-- `POST /api/v1/chat/chat`: Send a message and get a response
+- `POST /api/v1/chat/query`: Send a message and get a response
+
+  ```json
+  {
+    "message": "Tell me about recent tech news",
+    "session_id": "user_session_123"
+  }
+  ```
+
 - `GET /api/v1/chat/history/{session_id}`: Get chat history for a session
-- `DELETE /api/v1/chat/session/{session_id}`: Clear a chat session
+- `DELETE /api/v1/chat/clear/{session_id}`: Clear a chat session
 
 ### Health Check
 
 - `GET /health`: Check API health status
 
-## Caching Configuration
+## Redis Session Management and TTL Configuration
 
-The application uses Redis for caching chat sessions with the following configuration:
+The application uses Redis for chat session management with careful attention to TTL (Time-To-Live) configuration:
 
-- Session TTL: 24 hours (configurable in Redis)
-- Cache warming: Not implemented by default, but can be added by pre-loading common queries
+### TTL Implementation
 
-## Development
+Chat sessions in Redis are configured with a 24-hour expiration (86400 seconds) as seen in the `chat_service.py` file:
 
-To add new features or modify existing ones:
+```python
+# Set with expiration of 1 day (86400 seconds)
+self.redis_client.set(session_key, json.dumps(session_data), ex=86400)
+```
 
-1. Create a new branch
-2. Make your changes
-3. Add tests if necessary
-4. Submit a pull request
+This ensures that:
+
+- Sessions are automatically cleaned up after 24 hours of inactivity
+- Server resources are conserved by not storing inactive sessions indefinitely
+- User privacy is protected by removing old conversation data
+
+### Redis Configuration
+
+Redis is configured in `docker-compose.yml` with data persistence enabled:
+
+```yaml
+redis:
+  image: redis:latest
+  command: redis-server --appendonly yes
+  # ...other settings
+```
+
+The AOF (Append-Only File) persistence ensures that session data survives container restarts but still respects the TTL settings.
+
+### Session Keys
+
+Sessions are stored with a namespace prefix for easy identification:
+
+```
+chat:session:{session_id}
+```
+
+## Deployment
+
+### Docker Setup
+
+The application includes a Dockerfile and Docker Compose configuration for easy deployment:
+
+```bash
+# Build and run with Docker Compose
+docker-compose up -d
+
+# Or build and run manually
+docker build -t newschatbot-be .
+docker run -p 8000:8000 --env-file .env newschatbot-be
+```
+
+### GitHub Container Registry
+
+After pushing a tag to GitHub, the GitHub Actions workflow will automatically build and publish the Docker image:
+
+```bash
+docker pull ghcr.io/rahulgopathi/newschatbot-be:latest
+docker run -p 8000:8000 --env-file .env ghcr.io/rahulgopathi/newschatbot-be:latest
+```
 
 ## License
 
