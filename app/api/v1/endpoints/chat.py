@@ -8,7 +8,9 @@ from pydantic import BaseModel
 import uuid
 import asyncio
 import json
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 settings = get_settings()
 chat_service = ChatService()
@@ -79,6 +81,14 @@ async def chat(request: ChatRequest):
                     role="ai", content=full_response or "No response generated"
                 )
                 await chat_service.add_message(request.session_id, complete_message)
+
+                logger.info(
+                    "========================= GEMINI RESPONSE =========================="
+                )
+                logger.info(complete_message)
+                logger.info(
+                    "===================================================================="
+                )
 
             # Send END event
             yield {"event": "message", "data": json.dumps({"type": "END"})}

@@ -222,7 +222,6 @@ class QueryAnalyzer:
         user_query: str,
         context_text: str,
         query_type: str,
-        context_used: List[Dict[str, str]],
     ) -> tuple[str, Dict[int, Dict[str, str]]]:
         """
         Create a prompt tailored to the query type
@@ -238,16 +237,6 @@ class QueryAnalyzer:
         - A prompt optimized for the query type
         - A dictionary mapping source numbers to source details
         """
-        # Create source mapping
-        source_mapping = {
-            i
-            + 1: {
-                "url": article.get("url", ""),
-                "title": article.get("title", "Untitled"),
-                "source": article.get("source", "Unknown"),
-            }
-            for i, article in enumerate(context_used)
-        }
 
         # System instructions that apply to all response types
         system_instructions = """
@@ -273,6 +262,7 @@ SOURCE ATTRIBUTION:
 - Use source references consistently throughout your response
 - At the end of your response, include a "## Sources" section with numbered links to all sources
 - Format sources as: N. [Source Name](URL)
+- Never include any type of example source in your response
 - IMPORTANT: Every significant fact should have a source reference
 
 Never mention:
@@ -310,6 +300,7 @@ Provide a comprehensive summary of today's news. Focus on the key developments, 
 
 Format your response with:
 - A brief introduction
+- Include the date in the response
 - Markdown bullet points or numbered lists for key news items
 - Bold headlines for each major story
 - Group related items under markdown subheadings by topic or category

@@ -267,38 +267,30 @@ class ChatService:
 
             # Generate response using Gemini AI with the retrieved context
             context_text = ""
-            context_used = []
 
             # Use more articles for timelines, fewer for other query types
-            article_limit = 5 if query_analysis.get("query_type") == "timeline" else 3
+            article_limit = 10 if query_analysis.get("query_type") == "timeline" else 8
 
             for i, article in enumerate(relevant_news[:article_limit]):
                 # Format article reference for context with clearer source numbering
                 context_text += f"\n\nArticle {i+1}: {article['title']} ({article['source']}, {article['date']})\n"
                 context_text += f"URL: {article['url']}\n"
 
-                # Include more content for richer context, especially for fact-checking
-                if query_analysis.get("query_type") == "fact_check":
-                    article_length = 800
-                else:
-                    article_length = 500
-
-                context_text += f"{article['text'][:article_length]}...\n"
-
-                context_used.append(
-                    {
-                        "title": article["title"],
-                        "source": article["source"],
-                        "url": article["url"],
-                    }
-                )
+                context_text += f"{article['text']}\n"
 
             # Create an optimized prompt based on query type
             prompt = self.query_analyzer.create_prompt_for_query_type(
                 user_query=user_message,
                 context_text=context_text,
                 query_type=query_analysis.get("query_type", "relevance"),
-                context_used=context_used,
+            )
+
+            logger.info(
+                "=========================== PROMPT ==============================="
+            )
+            logger.info(prompt)
+            logger.info(
+                "=================================================================="
             )
 
             # Generate streaming response with Gemini using synchronous streaming
@@ -309,7 +301,6 @@ class ChatService:
 
             return {
                 "stream": response_stream,
-                "context_used": context_used,
             }
 
         except Exception as e:
