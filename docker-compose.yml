@@ -1,6 +1,42 @@
 version: '3.8'
 
 services:
+
+  frontend:
+    image: newschatbot-fe:latest
+    container_name: newschatbot-frontend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    networks:
+      - newschatbot_network
+    environment:
+      - VITE_BACKEND_API_URL=http://api:8000
+  api:
+    image: newschatbot-be:latest
+    container_name: newschatbot_api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - VECTOR_STORE_HOST=qdrant
+      - VECTOR_STORE_PORT=6333
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - JINA_API_KEY=${JINA_API_KEY}
+    depends_on:
+      - redis
+      - qdrant
+    restart: unless-stopped
+    networks:
+      - newschatbot_network
+
   redis:
     image: redis:latest
     container_name: newschatbot_redis

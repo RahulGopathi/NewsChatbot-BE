@@ -1,12 +1,12 @@
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, HTTPException
+from typing import Optional, List
+from sse_starlette.sse import EventSourceResponse
 from app.models.chat import ChatRequest, ChatResponse, Message
 from app.services.chat_service import ChatService
-from google import genai
 from app.core.config import get_settings
 from pydantic import BaseModel
 import uuid
+import asyncio
 import json
 
 router = APIRouter()
@@ -41,9 +41,9 @@ async def chat(request: ChatRequest):
             session_id=request.session_id,
         )
 
-        async def generate_stream():
-            # Send START event with proper SSE format
-            yield f"data: {json.dumps({'type': 'START'})}\n\n"
+        async def event_generator():
+            # Send START event with JSON data
+            yield {"event": "message", "data": json.dumps({"type": "START"})}
 
             # Stream the response
             if result["stream"]:
@@ -53,12 +53,26 @@ async def chat(request: ChatRequest):
                     for chunk in result["stream"]:
                         if hasattr(chunk, "text"):
                             full_response += chunk.text
-                            yield f"data: {json.dumps({'type': 'MESSAGE', 'role': 'ai', 'message': chunk.text})}\n\n"
+                            yield {
+                                "event": "message",
+                                "data": json.dumps(
+                                    {
+                                        "type": "MESSAGE",
+                                        "role": "ai",
+                                        "message": chunk.text,
+                                    }
+                                ),
+                            }
+                            # Add a small delay to prevent overwhelming the client
+                            await asyncio.sleep(0.01)
                 except Exception as e:
                     # If there's an error in stream processing, log it and yield it
                     error_msg = f"Error processing stream: {str(e)}"
                     print(error_msg)
-                    yield f"data: {json.dumps({'type': 'ERROR', 'message': error_msg})}\n\n"
+                    yield {
+                        "event": "message",
+                        "data": json.dumps({"type": "ERROR", "message": error_msg}),
+                    }
 
                 # Add the complete response as a new message instead of updating
                 complete_message = Message(
@@ -67,10 +81,11 @@ async def chat(request: ChatRequest):
                 await chat_service.add_message(request.session_id, complete_message)
 
             # Send END event
-            yield f"data: {json.dumps({'type': 'END'})}\n\n"
+            yield {"event": "message", "data": json.dumps({"type": "END"})}
 
-        return StreamingResponse(
-            generate_stream(),
+        # Create response with proper headers for SSE
+        return EventSourceResponse(
+            event_generator(),
             media_type="text/event-stream",
         )
     except Exception as e:

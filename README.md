@@ -2,6 +2,8 @@
 
 A RAG-powered chatbot backend for answering queries about news articles using FastAPI, Redis, and Gemini AI.
 
+![GitHub Actions Status](https://github.com/RahulGopathi/NewsChatbot-BE/workflows/Build%20and%20Push%20Docker%20Image/badge.svg)
+
 ## Features
 
 - RAG (Retrieval-Augmented Generation) pipeline for accurate responses
@@ -56,15 +58,28 @@ cp .env.example .env
 
 ### Option 1: Using Docker Compose
 
-Start both Redis and Qdrant using Docker Compose:
+The application can be run entirely using Docker Compose:
 
 ```bash
+# Create a .env file with your configuration
+cp .env.example .env
+
+# Edit the .env file with your API keys
+nano .env
+
+# Start all services including the API
 docker-compose up -d
 ```
 
-Then run the FastAPI application:
+The API will be available at `http://localhost:8000`
+
+For development, you can run only the dependencies and the API separately:
 
 ```bash
+# Start only Redis and Qdrant
+docker-compose up -d redis qdrant
+
+# Run the API with hot-reload for development
 uvicorn main:app --reload
 ```
 
@@ -88,7 +103,49 @@ docker run -p 6333:6333 qdrant/qdrant
 uvicorn main:app --reload
 ```
 
-The API will be available at `http://localhost:8000`
+## Docker Setup
+
+The application includes a Dockerfile and Docker Compose configuration for easy deployment:
+
+### Building the Docker Image Locally
+
+```bash
+# Build the Docker image
+docker build -t newschatbot-be .
+
+# Run the container
+docker run -p 8000:8000 --env-file .env newschatbot-be
+```
+
+### Using GitHub Container Registry
+
+After pushing to GitHub, the GitHub Actions workflow will automatically build and publish the Docker image. To use it:
+
+```bash
+# Pull the image
+docker pull ghcr.io/username/newschatbot-be:latest
+
+# Run the container
+docker run -p 8000:8000 --env-file .env ghcr.io/username/newschatbot-be:latest
+```
+
+Replace `username` with your GitHub username or organization.
+
+## GitHub Actions CI/CD
+
+The repository includes a GitHub Actions workflow that:
+
+1. Builds the Docker image only when a tag starting with "v" is pushed (e.g., v1.0.0)
+2. Tags the Docker image based on the git tag
+3. Pushes the image to GitHub Container Registry
+
+To enable the GitHub Actions workflow:
+
+1. Go to your repository settings on GitHub
+2. Navigate to "Actions" > "General"
+3. Ensure "Read and write permissions" is selected under "Workflow permissions"
+
+For more details, see the workflow file at `.github/workflows/docker-build.yml`.
 
 ## News Ingestion
 

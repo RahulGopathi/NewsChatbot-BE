@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "newschatbot-be"
+version = "0.1.0"
+description = "News Chatbot Backend"
+authors = ["Rahul Gopathi <hello@rahulgopathi.in>"]
+readme = "README.md"
+packages = [{include = "app"}]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<4.0"
+redis = "^6.1.0"
+fastapi = {extras = ["standard"], version = "^0.115.12"}
+news-please = "^1.6.14"
+google-genai = "^1.16.1"
+jinaai = "^0.2.10"
+uvicorn = "^0.34.2"
+pydantic-settings = "^2.9.1"
+qdrant-client = "^1.14.2"
+sse-starlette = "^1.6.5"
+
+[tool.poetry.group.dev.dependencies]
+
+[tool.poetry.scripts]
+api = "run:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api" 
